@@ -1,3 +1,4 @@
+import html
 import threading
 import streamlit as st
 from dotenv import load_dotenv
@@ -5,7 +6,15 @@ import dspy
 
 load_dotenv()
 
-MODELS = ["gpt-4o", "gpt-5-mini","gpt-4o-mini"]
+MODELS = ["gpt-4o", "gpt-5-mini", "gpt-4o-mini"]
+
+@st.cache_resource
+def _init_dspy():
+    """configure() exécuté une seule fois dans le thread qui crée le cache.
+    Les reruns Streamlit lisent le cache sans rappeler configure()."""
+    dspy.configure(lm=dspy.LM("openai/gpt-4o"))
+
+_init_dspy()
 
 
 class InstrumentedRLM(dspy.RLM):
@@ -179,8 +188,8 @@ with st.sidebar:
 
     st.markdown('<hr>', unsafe_allow_html=True)
     st.markdown('<div class="sidebar-section">Limits</div>', unsafe_allow_html=True)
-    max_iterations = st.number_input("Max depth (iterations)", min_value=1, max_value=50, value=1,
-                                     help="Max number of REPL iterations (≈ max_depth).")
+    max_iterations = st.number_input("Max iterations (REPL steps)", min_value=1, max_value=50, value=20,
+                                     help="Nombre de tours code→output dans le REPL. Différent de max_depth : DSPy RLM n'a pas de sous-agents récursifs.")
     max_llm_calls  = st.number_input("Max LLM calls per run", min_value=1, max_value=200, value=50,
                                      help="Max llm_query() calls across all iterations.")
     max_output_chars = st.number_input("Truncate length (chars)", min_value=1000, max_value=500_000,
@@ -197,8 +206,7 @@ def load_data():
         "Columns: id, guest, title, text\n\nCSV data starts below:\n" + csv_text
     )
 
-def make_rlm(primary_model, sub_model, max_iterations, max_llm_calls, max_output_chars):
-    dspy.configure(lm=dspy.LM(f"openai/{primary_model}"))
+def make_rlm(sub_model, max_iterations, max_llm_calls, max_output_chars):
     return InstrumentedRLM(
         "context, query -> answer",
         max_iterations=max_iterations,
@@ -236,10 +244,11 @@ if run:
         st.error(f"`{DATA_FILE}` introuvable — lance `python download_data.py` d'abord.")
         st.stop()
 
-    rlm = make_rlm(primary_model, sub_model, max_iterations, max_llm_calls, max_output_chars)
+    rlm = make_rlm(sub_model, max_iterations, max_llm_calls, max_output_chars)
 
     with st.spinner("RLM en cours…"):
-        result = rlm(context=context, query=query)
+        with dspy.context(lm=dspy.LM(f"openai/{primary_model}")):
+            result = rlm(context=context, query=query)
 
     trajectory = result.trajectory or []
     n = len(trajectory)
@@ -274,7 +283,7 @@ if run:
           </div>
           <div class="step-body">
             <div class="step-label">Step {i+1} / {n} {badge}</div>
-            <div class="reasoning-box">{reasoning}</div>
+            <div class="reasoning-box">{html.escape(reasoning)}</div>
           </div>
         </div>
         """, unsafe_allow_html=True)
@@ -285,8 +294,8 @@ if run:
         if subcalls:
             cards = ""
             for j, sc in enumerate(subcalls):
-                prompt_p   = sc["prompt"][:300].replace("<", "&lt;").replace(">", "&gt;")
-                response_p = sc["response"][:300].replace("<", "&lt;").replace(">", "&gt;")
+                prompt_p   = html.escape(sc["prompt"][:300])
+                response_p = html.escape(sc["response"][:300])
                 cards += f"""
                 <div class="subcall-card">
                   <div class="subcall-header">🤖 Sub-LLM call #{j+1}</div>
@@ -295,7 +304,7 @@ if run:
                 </div>"""
             st.markdown(f'<div class="subcall-wrap">{cards}</div>', unsafe_allow_html=True)
 
-        st.markdown(f'<div class="output-box">{output}</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="output-box">{html.escape(output)}</div>', unsafe_allow_html=True)
 
     # ── Final answer ────────────────────────────────────────────────────────────
     st.markdown(f"""
