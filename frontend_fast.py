@@ -1,8 +1,19 @@
+import os
 import streamlit as st
 from dotenv import load_dotenv
-import dspy
 
 load_dotenv()
+
+# fast-rlm uses RLM_MODEL_API_KEY + RLM_MODEL_BASE_URL (OpenAI-compatible)
+if not os.environ.get("RLM_MODEL_API_KEY"):
+    os.environ["RLM_MODEL_API_KEY"] = os.environ.get("OPENAI_API_KEY", "")
+if not os.environ.get("RLM_MODEL_BASE_URL"):
+    os.environ["RLM_MODEL_BASE_URL"] = "https://api.openai.com/v1"
+
+# Deno is required by fast-rlm
+os.environ["PATH"] = f"{os.path.expanduser('~/.deno/bin')}:{os.environ['PATH']}"
+
+import fast_rlm
 
 DATA_FILE = "data/lex_fridman_dataset.csv"
 DEFAULT_QUERY = (
@@ -20,13 +31,9 @@ st.set_page_config(
 
 st.markdown("""
 <style>
-  /* Page background */
   .stApp { background-color: #0e0e0e; color: #f0f0f0; }
-
-  /* Hide Streamlit chrome */
   #MainMenu, footer, header { visibility: hidden; }
 
-  /* Hero */
   .hero {
     text-align: center;
     padding: 2.5rem 0 1.5rem;
@@ -38,12 +45,8 @@ st.markdown("""
     color: #ffffff;
     margin-bottom: 0.3rem;
   }
-  .hero p {
-    color: #888;
-    font-size: 0.95rem;
-  }
+  .hero p { color: #888; font-size: 0.95rem; }
 
-  /* Stat pills */
   .stats {
     display: flex;
     justify-content: center;
@@ -61,7 +64,6 @@ st.markdown("""
   }
   .stat b { color: #fff; }
 
-  /* Text area override */
   .stTextArea textarea {
     background: #1a1a1a !important;
     border: 1px solid #2e2e2e !important;
@@ -75,7 +77,6 @@ st.markdown("""
     box-shadow: none !important;
   }
 
-  /* Button */
   .stButton > button {
     width: 100%;
     background: #ffffff !important;
@@ -91,7 +92,6 @@ st.markdown("""
   .stButton > button:hover { opacity: 0.85; }
   .stButton > button:disabled { opacity: 0.3 !important; }
 
-  /* Result card */
   .result-card {
     background: #141414;
     border: 1px solid #2a2a2a;
@@ -111,27 +111,29 @@ st.markdown("""
     margin-bottom: 0.75rem;
   }
 
-  /* Spinner text */
-  .stSpinner > div { color: #888 !important; }
+  .usage-bar {
+    display: flex;
+    gap: 1rem;
+    margin-top: 1rem;
+    flex-wrap: wrap;
+  }
+  .usage-pill {
+    background: #1a1a1a;
+    border: 1px solid #2a2a2a;
+    border-radius: 999px;
+    padding: 0.25rem 0.85rem;
+    font-size: 0.78rem;
+    color: #666;
+  }
+  .usage-pill b { color: #aaa; }
 </style>
 """, unsafe_allow_html=True)
 
 
 @st.cache_resource(show_spinner="Loading 319 transcripts…")
-def load_data():
+def load_csv():
     with open(DATA_FILE, encoding="utf-8", errors="replace") as f:
-        csv_text = f.read()
-    return (
-        "The following is a CSV file with transcripts from the Lex Fridman Podcast.\n"
-        "Columns: id, guest, title, text\n\n"
-        "CSV data starts below:\n"
-        + csv_text
-    )
-
-@st.cache_resource(show_spinner="Configuring model…")
-def load_rlm():
-    dspy.configure(lm=dspy.LM("openai/gpt-4o"))
-    return dspy.RLM("context, query -> answer")
+        return f.read()
 
 
 # --- Hero ---
@@ -143,7 +145,7 @@ st.markdown("""
 <div class="stats">
   <span class="stat"><b>319</b> episodes</span>
   <span class="stat"><b>37M</b> chars</span>
-  <span class="stat"><b>DSPy</b> RLM</span>
+  <span class="stat"><b>fast-rlm</b></span>
   <span class="stat"><b>GPT-4o</b></span>
 </div>
 """, unsafe_allow_html=True)
@@ -157,18 +159,46 @@ run = st.button("Run", disabled=not query.strip())
 # --- Run ---
 if run:
     try:
-        context = load_data()
-        rlm = load_rlm()
+        csv_text = load_csv()
     except FileNotFoundError:
         st.error(f"`{DATA_FILE}` introuvable — lance `python download_data.py` d'abord.")
         st.stop()
 
+    full_context = (
+        f"{query}\n\n"
+        "The CSV starts below this line:\n"
+        "# Data:\n"
+        f"{csv_text}"
+    )
+
+    config = fast_rlm.RLMConfig(
+        primary_agent="gpt-4o",
+        sub_agent="gpt-4o-mini",
+        max_depth=4,
+        truncate_len=10000,
+    )
+
     with st.spinner("RLM en cours… (quelques minutes)"):
-        result = rlm(context=context, query=query)
+        data = fast_rlm.run(full_context, config=config, prefix="lex_fridman", verbose=False)
+
+    result = data.get("results", "")
+    usage = data.get("usage", {})
 
     st.markdown(f"""
     <div class="result-card">
       <div class="result-label">Résultat</div>
-      {result.answer.replace(chr(10), '<br>')}
+      {str(result).replace(chr(10), '<br>')}
     </div>
     """, unsafe_allow_html=True)
+
+    if usage:
+        prompt_tok = usage.get("prompt_tokens", 0)
+        completion_tok = usage.get("completion_tokens", 0)
+        cost = usage.get("total_cost_usd", 0)
+        st.markdown(f"""
+        <div class="usage-bar">
+          <span class="usage-pill">prompt <b>{prompt_tok:,}</b> tok</span>
+          <span class="usage-pill">completion <b>{completion_tok:,}</b> tok</span>
+          <span class="usage-pill">coût <b>${cost:.4f}</b></span>
+        </div>
+        """, unsafe_allow_html=True)
