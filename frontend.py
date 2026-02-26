@@ -5,6 +5,8 @@ import dspy
 
 load_dotenv()
 
+MODELS = ["gpt-4o", "gpt-5-mini","gpt-4o-mini"]
+
 
 class InstrumentedRLM(dspy.RLM):
     """RLM qui enregistre chaque appel llm_query par itération."""
@@ -50,6 +52,7 @@ class InstrumentedRLM(dspy.RLM):
         self.subcalls.clear()
         return super().forward(**input_args)
 
+
 DATA_FILE = "data/lex_fridman_dataset.csv"
 DEFAULT_QUERY = (
     "Find what the first 5 Machine Learning guests had to say about AGI "
@@ -64,6 +67,20 @@ st.markdown("""
 <style>
   .stApp { background-color: #0e0e0e; color: #f0f0f0; }
   #MainMenu, footer, header { visibility: hidden; }
+
+  /* Sidebar */
+  [data-testid="stSidebar"] { background-color: #111 !important; border-right: 1px solid #1e1e1e; }
+  [data-testid="stSidebar"] * { color: #ccc !important; }
+  [data-testid="stSidebar"] .stSelectbox div[data-baseweb="select"] > div,
+  [data-testid="stSidebar"] .stNumberInput input {
+    background: #1a1a1a !important; border-color: #2a2a2a !important; color: #eee !important;
+  }
+  [data-testid="stSidebar"] label { color: #888 !important; font-size: 0.8rem !important; }
+  [data-testid="stSidebar"] .sidebar-section {
+    font-size: 0.65rem; font-weight: 700; letter-spacing: 0.12em;
+    text-transform: uppercase; color: #444 !important; margin: 1.2rem 0 0.5rem;
+  }
+  [data-testid="stSidebar"] hr { border-color: #1e1e1e !important; margin: 0.75rem 0; }
 
   .hero { text-align: center; padding: 2.5rem 0 1.5rem; }
   .hero h1 { font-size: 2.4rem; font-weight: 700; letter-spacing: -0.5px; color: #fff; margin-bottom: 0.3rem; }
@@ -96,10 +113,7 @@ st.markdown("""
     text-transform: uppercase; color: #444; margin: 2.5rem 0 1.2rem;
   }
   .step-wrap { display: flex; gap: 0; margin-bottom: 0; }
-  .step-line {
-    display: flex; flex-direction: column; align-items: center;
-    width: 32px; flex-shrink: 0;
-  }
+  .step-line { display: flex; flex-direction: column; align-items: center; width: 32px; flex-shrink: 0; }
   .step-dot {
     width: 10px; height: 10px; border-radius: 50%; background: #333;
     border: 2px solid #444; flex-shrink: 0; margin-top: 4px;
@@ -114,10 +128,7 @@ st.markdown("""
     text-transform: uppercase; color: #555; margin-bottom: 0.6rem;
     display: flex; align-items: center; gap: 0.5rem;
   }
-  .badge {
-    font-size: 0.65rem; padding: 0.15rem 0.55rem; border-radius: 999px;
-    font-weight: 700; letter-spacing: 0.05em;
-  }
+  .badge { font-size: 0.65rem; padding: 0.15rem 0.55rem; border-radius: 999px; font-weight: 700; letter-spacing: 0.05em; }
   .badge-llm   { background: #2e1065; color: #a78bfa; border: 1px solid #4c1d95; }
   .badge-final { background: #052e16; color: #4ade80; border: 1px solid #14532d; }
 
@@ -140,10 +151,7 @@ st.markdown("""
     border-left: 3px solid #7c3aed; border-radius: 6px;
     padding: 0.6rem 0.85rem; margin-bottom: 0.4rem;
   }
-  .subcall-header {
-    font-size: 0.68rem; font-weight: 700; letter-spacing: 0.08em;
-    color: #7c3aed; text-transform: uppercase; margin-bottom: 0.4rem;
-  }
+  .subcall-header { font-size: 0.68rem; font-weight: 700; letter-spacing: 0.08em; color: #7c3aed; text-transform: uppercase; margin-bottom: 0.4rem; }
   .subcall-row { display: flex; gap: 0.5rem; font-size: 0.78rem; line-height: 1.5; }
   .subcall-lbl { color: #555; flex-shrink: 0; width: 4rem; }
   .subcall-txt { color: #999; word-break: break-word; }
@@ -154,12 +162,30 @@ st.markdown("""
     border-radius: 12px; padding: 1.5rem 1.75rem;
     margin: 1.5rem 0; line-height: 1.75; font-size: 0.93rem; color: #ccc;
   }
-  .result-label {
-    font-size: 0.72rem; font-weight: 600; letter-spacing: 0.1em;
-    color: #2d6a3f; text-transform: uppercase; margin-bottom: 0.75rem;
-  }
+  .result-label { font-size: 0.72rem; font-weight: 600; letter-spacing: 0.1em; color: #2d6a3f; text-transform: uppercase; margin-bottom: 0.75rem; }
 </style>
 """, unsafe_allow_html=True)
+
+
+# ── Sidebar config ─────────────────────────────────────────────────────────────
+with st.sidebar:
+    st.markdown("## Configuration")
+
+    st.markdown('<div class="sidebar-section">Models</div>', unsafe_allow_html=True)
+    primary_model = st.selectbox("Primary agent", MODELS, index=0,
+                                 help="Main LLM that writes and executes code in the REPL.")
+    sub_model     = st.selectbox("Sub-agent", MODELS, index=1,
+                                 help="LLM called via llm_query() for semantic sub-tasks.")
+
+    st.markdown('<hr>', unsafe_allow_html=True)
+    st.markdown('<div class="sidebar-section">Limits</div>', unsafe_allow_html=True)
+    max_iterations = st.number_input("Max depth (iterations)", min_value=1, max_value=50, value=1,
+                                     help="Max number of REPL iterations (≈ max_depth).")
+    max_llm_calls  = st.number_input("Max LLM calls per run", min_value=1, max_value=200, value=50,
+                                     help="Max llm_query() calls across all iterations.")
+    max_output_chars = st.number_input("Truncate length (chars)", min_value=1000, max_value=500_000,
+                                       value=100_000, step=10_000,
+                                       help="Max REPL output chars shown to the LLM per step.")
 
 
 @st.cache_resource(show_spinner="Loading 319 transcripts…")
@@ -171,14 +197,19 @@ def load_data():
         "Columns: id, guest, title, text\n\nCSV data starts below:\n" + csv_text
     )
 
-@st.cache_resource(show_spinner="Configuring model…")
-def load_rlm():
-    dspy.configure(lm=dspy.LM("openai/gpt-4o-mini"))
-    return InstrumentedRLM("context, query -> answer")
+def make_rlm(primary_model, sub_model, max_iterations, max_llm_calls, max_output_chars):
+    dspy.configure(lm=dspy.LM(f"openai/{primary_model}"))
+    return InstrumentedRLM(
+        "context, query -> answer",
+        max_iterations=max_iterations,
+        max_llm_calls=max_llm_calls,
+        max_output_chars=max_output_chars,
+        sub_lm=dspy.LM(f"openai/{sub_model}"),
+    )
 
 
-# ── Hero ──────────────────────────────────────────────────────────────────────
-st.markdown("""
+# ── Hero ───────────────────────────────────────────────────────────────────────
+st.markdown(f"""
 <div class="hero">
   <h1>🎙️ Lex Fridman RLM Demo</h1>
   <p>Recursive Language Model querying 319 podcast transcripts</p>
@@ -187,7 +218,8 @@ st.markdown("""
   <span class="stat"><b>319</b> episodes</span>
   <span class="stat"><b>37M</b> chars</span>
   <span class="stat"><b>DSPy</b> RLM</span>
-  <span class="stat"><b>GPT-4o</b></span>
+  <span class="stat"><b>{primary_model}</b> → <b>{sub_model}</b></span>
+  <span class="stat">depth <b>{max_iterations}</b></span>
 </div>
 """, unsafe_allow_html=True)
 
@@ -196,14 +228,15 @@ query = st.text_area("Query", placeholder="Ask anything about the podcast…",
 
 run = st.button("Run", disabled=not query.strip())
 
-# ── Run ───────────────────────────────────────────────────────────────────────
+# ── Run ────────────────────────────────────────────────────────────────────────
 if run:
     try:
         context = load_data()
-        rlm = load_rlm()
     except FileNotFoundError:
         st.error(f"`{DATA_FILE}` introuvable — lance `python download_data.py` d'abord.")
         st.stop()
+
+    rlm = make_rlm(primary_model, sub_model, max_iterations, max_llm_calls, max_output_chars)
 
     with st.spinner("RLM en cours…"):
         result = rlm(context=context, query=query)
@@ -211,24 +244,22 @@ if run:
     trajectory = result.trajectory or []
     n = len(trajectory)
 
-    # ── Trajectory ────────────────────────────────────────────────────────────
+    # ── Trajectory ─────────────────────────────────────────────────────────────
     st.markdown('<div class="traj-header">Trajectoire REPL</div>', unsafe_allow_html=True)
 
     for i, step in enumerate(trajectory):
-        code    = step.get("code", "")
-        output  = step.get("output", "")
+        code      = step.get("code", "")
+        output    = step.get("output", "")
         reasoning = step.get("reasoning", "")
-        is_last = (i == n - 1)
-        has_llm = "llm_query" in code
-        dot_cls = "final" if is_last else ("llm" if has_llm else "")
+        is_last   = (i == n - 1)
+        has_llm   = "llm_query" in code
+        dot_cls   = "final" if is_last else ("llm" if has_llm else "")
 
         badge = ""
         if has_llm:
             badge = '<span class="badge badge-llm">sub-LLM call</span>'
         if is_last:
             badge = '<span class="badge badge-final">SUBMIT</span>'
-
-        # Count llm_query calls
         sub_calls = code.count("llm_query(") + code.count("llm_query_batched(")
         if sub_calls > 1:
             badge += f'<span class="badge badge-llm" style="margin-left:4px">{sub_calls}× calls</span>'
@@ -250,32 +281,23 @@ if run:
 
         st.code(code, language="python")
 
-        # Sub-LLM calls captured by InstrumentedRLM
         subcalls = rlm.subcalls.get(i, [])
         if subcalls:
             cards = ""
             for j, sc in enumerate(subcalls):
-                prompt_preview   = sc["prompt"][:300].replace("<", "&lt;").replace(">", "&gt;")
-                response_preview = sc["response"][:300].replace("<", "&lt;").replace(">", "&gt;")
+                prompt_p   = sc["prompt"][:300].replace("<", "&lt;").replace(">", "&gt;")
+                response_p = sc["response"][:300].replace("<", "&lt;").replace(">", "&gt;")
                 cards += f"""
                 <div class="subcall-card">
                   <div class="subcall-header">🤖 Sub-LLM call #{j+1}</div>
-                  <div class="subcall-row">
-                    <span class="subcall-lbl">Prompt</span>
-                    <span class="subcall-txt">{prompt_preview}…</span>
-                  </div>
-                  <div class="subcall-row">
-                    <span class="subcall-lbl">Response</span>
-                    <span class="subcall-txt">{response_preview}…</span>
-                  </div>
+                  <div class="subcall-row"><span class="subcall-lbl">Prompt</span><span class="subcall-txt">{prompt_p}…</span></div>
+                  <div class="subcall-row"><span class="subcall-lbl">Response</span><span class="subcall-txt">{response_p}…</span></div>
                 </div>"""
             st.markdown(f'<div class="subcall-wrap">{cards}</div>', unsafe_allow_html=True)
 
-        st.markdown(f"""
-        <div class="output-box">{output}</div>
-        """, unsafe_allow_html=True)
+        st.markdown(f'<div class="output-box">{output}</div>', unsafe_allow_html=True)
 
-    # ── Final answer ──────────────────────────────────────────────────────────
+    # ── Final answer ────────────────────────────────────────────────────────────
     st.markdown(f"""
     <div class="result-card">
       <div class="result-label">✦ Résultat final</div>
