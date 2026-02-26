@@ -1,8 +1,54 @@
+import threading
 import streamlit as st
 from dotenv import load_dotenv
 import dspy
 
 load_dotenv()
+
+
+class InstrumentedRLM(dspy.RLM):
+    """RLM qui enregistre chaque appel llm_query par itération."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.subcalls: dict[int, list[dict]] = {}
+        self._iter_subcalls: list[dict] = []
+        self._lock = threading.Lock()
+
+    def _make_llm_tools(self, max_workers: int = 8):
+        tools = super()._make_llm_tools(max_workers)
+        orig_query   = tools["llm_query"]
+        orig_batched = tools["llm_query_batched"]
+
+        def llm_query(prompt: str) -> str:
+            result = orig_query(prompt)
+            with self._lock:
+                self._iter_subcalls.append({"prompt": prompt, "response": result})
+            return result
+
+        def llm_query_batched(prompts: list) -> list:
+            results = orig_batched(prompts)
+            with self._lock:
+                for p, r in zip(prompts, results):
+                    self._iter_subcalls.append({"prompt": p, "response": r})
+            return results
+
+        tools["llm_query"]         = llm_query
+        tools["llm_query_batched"] = llm_query_batched
+        return tools
+
+    def _execute_iteration(self, repl, variables, history, iteration, input_args, output_field_names):
+        with self._lock:
+            self._iter_subcalls = []
+        result = super()._execute_iteration(repl, variables, history, iteration, input_args, output_field_names)
+        with self._lock:
+            if self._iter_subcalls:
+                self.subcalls[iteration] = list(self._iter_subcalls)
+        return result
+
+    def forward(self, **input_args):
+        self.subcalls.clear()
+        return super().forward(**input_args)
 
 DATA_FILE = "data/lex_fridman_dataset.csv"
 DEFAULT_QUERY = (
@@ -87,6 +133,21 @@ st.markdown("""
     max-height: 200px; overflow-y: auto; margin-top: 0.5rem;
   }
 
+  /* Sub-call cards */
+  .subcall-wrap { margin: 0.5rem 0 0.75rem; }
+  .subcall-card {
+    background: #150d2a; border: 1px solid #3b1f6e;
+    border-left: 3px solid #7c3aed; border-radius: 6px;
+    padding: 0.6rem 0.85rem; margin-bottom: 0.4rem;
+  }
+  .subcall-header {
+    font-size: 0.68rem; font-weight: 700; letter-spacing: 0.08em;
+    color: #7c3aed; text-transform: uppercase; margin-bottom: 0.4rem;
+  }
+  .subcall-row { display: flex; gap: 0.5rem; font-size: 0.78rem; line-height: 1.5; }
+  .subcall-lbl { color: #555; flex-shrink: 0; width: 4rem; }
+  .subcall-txt { color: #999; word-break: break-word; }
+
   /* Result card */
   .result-card {
     background: #0d1f12; border: 1px solid #1a3a22;
@@ -112,8 +173,8 @@ def load_data():
 
 @st.cache_resource(show_spinner="Configuring model…")
 def load_rlm():
-    dspy.configure(lm=dspy.LM("openai/gpt-4o"))
-    return dspy.RLM("context, query -> answer")
+    dspy.configure(lm=dspy.LM("openai/gpt-4o-mini"))
+    return InstrumentedRLM("context, query -> answer")
 
 
 # ── Hero ──────────────────────────────────────────────────────────────────────
@@ -188,6 +249,27 @@ if run:
         """, unsafe_allow_html=True)
 
         st.code(code, language="python")
+
+        # Sub-LLM calls captured by InstrumentedRLM
+        subcalls = rlm.subcalls.get(i, [])
+        if subcalls:
+            cards = ""
+            for j, sc in enumerate(subcalls):
+                prompt_preview   = sc["prompt"][:300].replace("<", "&lt;").replace(">", "&gt;")
+                response_preview = sc["response"][:300].replace("<", "&lt;").replace(">", "&gt;")
+                cards += f"""
+                <div class="subcall-card">
+                  <div class="subcall-header">🤖 Sub-LLM call #{j+1}</div>
+                  <div class="subcall-row">
+                    <span class="subcall-lbl">Prompt</span>
+                    <span class="subcall-txt">{prompt_preview}…</span>
+                  </div>
+                  <div class="subcall-row">
+                    <span class="subcall-lbl">Response</span>
+                    <span class="subcall-txt">{response_preview}…</span>
+                  </div>
+                </div>"""
+            st.markdown(f'<div class="subcall-wrap">{cards}</div>', unsafe_allow_html=True)
 
         st.markdown(f"""
         <div class="output-box">{output}</div>
