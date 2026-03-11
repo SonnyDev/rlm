@@ -219,7 +219,7 @@ def make_rlm(sub_model, max_iterations, max_llm_calls, max_output_chars):
 # ── Hero ───────────────────────────────────────────────────────────────────────
 st.markdown(f"""
 <div class="hero">
-  <h1>🎙️ Lex Fridman RLM Demo</h1>
+  <h1>🎙️ RLM Demo</h1>
   <p>Recursive Language Model querying 319 podcast transcripts</p>
 </div>
 <div class="stats">
@@ -227,7 +227,6 @@ st.markdown(f"""
   <span class="stat"><b>37M</b> chars</span>
   <span class="stat"><b>DSPy</b> RLM</span>
   <span class="stat"><b>{primary_model}</b> → <b>{sub_model}</b></span>
-  <span class="stat">depth <b>{max_iterations}</b></span>
 </div>
 """, unsafe_allow_html=True)
 
@@ -256,14 +255,18 @@ if run:
     # ── Trajectory ─────────────────────────────────────────────────────────────
     st.markdown('<div class="traj-header">Trajectoire REPL</div>', unsafe_allow_html=True)
 
+    def esc(s: str) -> str:
+        """Escape HTML sans toucher aux apostrophes (quote=False)."""
+        return html.escape(s, quote=False)
+
     for i, step in enumerate(trajectory):
         code      = step.get("code", "")
         output    = step.get("output", "")
         reasoning = step.get("reasoning", "")
         is_last   = (i == n - 1)
         has_llm   = "llm_query" in code
-        dot_cls   = "final" if is_last else ("llm" if has_llm else "")
 
+        dot_color = "#16a34a" if is_last else ("#7c3aed" if has_llm else "#444")
         badge = ""
         if has_llm:
             badge = '<span class="badge badge-llm">sub-LLM call</span>'
@@ -273,38 +276,47 @@ if run:
         if sub_calls > 1:
             badge += f'<span class="badge badge-llm" style="margin-left:4px">{sub_calls}× calls</span>'
 
-        connector = "" if is_last else '<div class="step-connector"></div>'
+        # ── Layout: dot (colonne étroite) + contenu (colonne large) ──────────
+        col_dot, col_body = st.columns([0.03, 0.97])
 
-        st.markdown(f"""
-        <div class="step-wrap">
-          <div class="step-line">
-            <div class="step-dot {dot_cls}"></div>
-            {connector}
-          </div>
-          <div class="step-body">
-            <div class="step-label">Step {i+1} / {n} {badge}</div>
-            <div class="reasoning-box">{html.escape(reasoning)}</div>
-          </div>
-        </div>
-        """, unsafe_allow_html=True)
+        with col_dot:
+            connector_style = "" if is_last else (
+                "border-left: 2px solid #222; margin-left: 4px; min-height: 300px;"
+            )
+            st.markdown(
+                f'<div style="display:flex;flex-direction:column;align-items:center;padding-top:4px">'
+                f'  <div style="width:10px;height:10px;border-radius:50%;background:{dot_color};flex-shrink:0"></div>'
+                f'  <div style="{connector_style}"></div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
 
-        st.code(code, language="python")
+        with col_body:
+            st.markdown(
+                f'<div class="step-label">Step {i+1} / {n} &nbsp;{badge}</div>'
+                f'<div class="reasoning-box">{esc(reasoning)}</div>',
+                unsafe_allow_html=True,
+            )
+            st.code(code, language="python")
 
-        subcalls = rlm.subcalls.get(i, [])
-        if subcalls:
-            cards = ""
+            # Sub-LLM calls capturés par InstrumentedRLM
+            subcalls = rlm.subcalls.get(i, [])
             for j, sc in enumerate(subcalls):
-                prompt_p   = html.escape(sc["prompt"][:300])
-                response_p = html.escape(sc["response"][:300])
-                cards += f"""
-                <div class="subcall-card">
-                  <div class="subcall-header">🤖 Sub-LLM call #{j+1}</div>
-                  <div class="subcall-row"><span class="subcall-lbl">Prompt</span><span class="subcall-txt">{prompt_p}…</span></div>
-                  <div class="subcall-row"><span class="subcall-lbl">Response</span><span class="subcall-txt">{response_p}…</span></div>
-                </div>"""
-            st.markdown(f'<div class="subcall-wrap">{cards}</div>', unsafe_allow_html=True)
+                st.markdown(
+                    f'<div class="subcall-card">'
+                    f'  <div class="subcall-header">🤖 Sub-LLM call #{j+1}</div>'
+                    f'  <div class="subcall-row"><span class="subcall-lbl">Prompt</span>'
+                    f'    <span class="subcall-txt">{esc(sc["prompt"][:300])}…</span></div>'
+                    f'  <div class="subcall-row"><span class="subcall-lbl">Response</span>'
+                    f'    <span class="subcall-txt">{esc(sc["response"][:300])}…</span></div>'
+                    f'</div>',
+                    unsafe_allow_html=True,
+                )
 
-        st.markdown(f'<div class="output-box">{html.escape(output)}</div>', unsafe_allow_html=True)
+            st.markdown(
+                f'<div class="output-box">{esc(output)}</div>',
+                unsafe_allow_html=True,
+            )
 
     # ── Final answer ────────────────────────────────────────────────────────────
     st.markdown(f"""
