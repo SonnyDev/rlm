@@ -4,3 +4,4 @@ data/
 rlm_env/
 __pycache__/
 *.pyc
+runs/

@@ -15,7 +15,7 @@ from google.adk.agents.invocation_context import InvocationContext
 
 from .repl import LocalREPL, extract_code_blocks, extract_reasoning
 from .prompts import RLM_SYSTEM_PROMPT, build_user_prompt, build_iteration_prompt
-from .types import RLMResult, RLMIteration, SubCall
+from .types import RLMResult, RLMIteration, SubCall, RunConfig
 
 
 class RLMAgent(BaseAgent):
@@ -79,9 +79,20 @@ class RLMAgent(BaseAgent):
                     results[idx] = f"[ERROR] {e}"
         return results
 
+    def _build_config(self, query: str) -> RunConfig:
+        return RunConfig(
+            model=self.model,
+            sub_model=self.sub_model,
+            max_iterations=self.max_iterations,
+            max_llm_calls=self.max_llm_calls,
+            max_output_chars=self.max_output_chars,
+            query=query,
+        )
+
     def run(self, context: str, query: str) -> RLMResult:
         """Run the RLM loop synchronously."""
         client = self._get_client()
+        config = self._build_config(query)
         repl = LocalREPL(context, self._llm_query, self._llm_query_batched)
         trajectory: list[RLMIteration] = []
         total_subcalls = 0
@@ -135,6 +146,7 @@ class RLMAgent(BaseAgent):
                                 trajectory=trajectory,
                                 total_iterations=step,
                                 total_subcalls=total_subcalls,
+                                config=config,
                             )
                             return self._result
                     break
@@ -160,6 +172,7 @@ class RLMAgent(BaseAgent):
                         trajectory=trajectory,
                         total_iterations=step,
                         total_subcalls=total_subcalls,
+                        config=config,
                     )
                     return self._result
 
@@ -192,6 +205,7 @@ class RLMAgent(BaseAgent):
             trajectory=trajectory,
             total_iterations=len(trajectory),
             total_subcalls=total_subcalls,
+            config=config,
         )
         return self._result
 

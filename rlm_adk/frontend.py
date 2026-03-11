@@ -1,6 +1,7 @@
 import html
 import os
 import sys
+from datetime import datetime
 
 # Ensure parent directory is on sys.path so rlm_adk is importable
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
@@ -195,6 +196,12 @@ if run:
 
     with st.spinner("RLM running with Google ADK + Gemini…"):
         result = agent.run(context=context, query=query)
+
+    # ── Auto-export ────────────────────────────────────────────────────────────
+    runs_dir = os.path.join(os.path.dirname(__file__), "..", "runs")
+    ts = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    export_path = result.export_markdown(os.path.join(runs_dir, f"run_{ts}.md"))
+    st.toast(f"Run saved to {export_path.name}", icon="💾")
 
     trajectory = result.trajectory
     n = len(trajectory)
