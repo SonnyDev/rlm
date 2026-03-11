@@ -1,5 +1,10 @@
 import html
 import os
+import sys
+
+# Ensure parent directory is on sys.path so rlm_adk is importable
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+
 import streamlit as st
 from dotenv import load_dotenv
 
