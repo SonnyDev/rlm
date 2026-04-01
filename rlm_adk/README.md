@@ -1,15 +1,15 @@
 # RLM ADK — Podcast Lex Fridman (Google ADK + Gemini)
 
-Variante de la demo podcast utilisant Google ADK (Agent Development Kit) et les modeles Gemini au lieu de DSPy + OpenAI.
+Variante de la démo podcast utilisant Google ADK (Agent Development Kit) et les modèles Gemini au lieu de DSPy + OpenAI.
 
 ## Architecture
 
 ```
-Lex Fridman CSV (319 episodes, 37M chars)
+Lex Fridman CSV (319 épisodes, 37M chars)
     |
     v
 RLMAgent(BaseAgent)          <- agent.py
-    |-- Gemini ecrit du Python
+    |-- Gemini écrit du Python
     |-- llm_query() via google.genai
     |-- llm_query_batched() concurrent (ThreadPoolExecutor)
     |-- REPL sandbox           <- repl.py
@@ -19,11 +19,11 @@ RLMResult + export Markdown   <- types.py
 
 ## Fichiers
 
-| Fichier | Role |
+| Fichier | Rôle |
 |---------|------|
 | `agent.py` | `RLMAgent(BaseAgent)` — boucle RLM avec Gemini |
-| `repl.py` | REPL Python sandboxe avec `llm_query`, `FINAL` |
-| `prompts.py` | Prompt systeme RLM + builders |
+| `repl.py` | REPL Python sandboxé avec `llm_query`, `FINAL` |
+| `prompts.py` | Prompt système RLM + builders |
 | `types.py` | `RLMResult`, `RLMIteration`, `SubCall`, export Markdown |
 | `frontend.py` | Streamlit avec trajectoire REPL |
 
@@ -34,10 +34,10 @@ cd /chemin/vers/rlm
 rlm_env/bin/streamlit run rlm_adk/frontend.py
 ```
 
-Necessite `GOOGLE_API_KEY` dans `.env`.
+Nécessite `GOOGLE_API_KEY` dans `.env`.
 
-## Modeles supportes
+## Modèles supportés
 
-- `gemini-2.5-flash` (defaut)
+- `gemini-2.5-flash` (défaut)
 - `gemini-2.5-pro`
 - `gemini-2.0-flash`
