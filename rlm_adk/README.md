@@ -30,7 +30,7 @@ RLMResult + export Markdown   <- types.py
 ## Lancement
 
 ```bash
-cd /chemin/vers/rlm
+cd ..
 rlm_env/bin/streamlit run rlm_adk/frontend.py
 ```
 
