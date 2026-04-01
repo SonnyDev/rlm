@@ -4,7 +4,7 @@ Détection des recommandations récurrentes dans les rapports publics de la Cour
 
 ## Problème
 
-La Cour des Comptes publie chaque année des rapports contenant des recommandations aux administrations. Certaines recommandations sont reformulées année après année, signalant qu'elles n'ont pas été mises en œuvre. Détecter ces récurrences nécessite de lire et comparer l'intégralité du corpus — une tâche impossible pour un humain ou un LLM classique.
+La Cour des Comptes publie chaque année des rapports contenant des recommandations aux administrations. Certaines recommandations sont reformulées année après année, signalant qu'elles n'ont pas été mises en œuvre. Détecter ces récurrences nécessite de lire et comparer l'intégralité du corpus.
 
 ## Architecture
 
